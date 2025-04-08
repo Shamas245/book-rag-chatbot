@@ -1,12 +1,16 @@
 from typing import List, Dict, Any
 import logging
-from langchain_chroma import Chroma  # Updated import
+from langchain_chroma import Chroma
 from langchain_community.vectorstores.utils import filter_complex_metadata
 from langchain.docstore.document import Document
+import sqlite3  # Add this to debug the version
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+# Debug sqlite3 version
+logger.info(f"SQLite version: {sqlite3.sqlite_version}")
 
 class VectorDBError(Exception):
     pass
@@ -26,7 +30,7 @@ class VectorDBManager:
             )
             logger.info(f"Vector store initialized for user {self.username}")
         except Exception as e:
-            logger.error(f"Failed to initialize vector store: {e}")
+            logger.error(f"Vector store initialization failed: {str(e)}", exc_info=True)
             raise VectorDBError(f"Could not initialize vector database: {str(e)}")
 
     def store_in_vector_db(self, chunks_with_embeddings: List[Dict[str, Any]]):
