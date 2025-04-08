@@ -8,3 +8,4 @@ ebooklib>=0.18
 beautifulsoup4>=4.12.0
 python-docx>=0.8.11
 pillow>=10.0.0
+langchain-google-genai==2.0.6
