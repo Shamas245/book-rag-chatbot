@@ -10,6 +10,7 @@ from PIL import Image
 import io
 import logging
 import threading
+import streamlit as st
 from google.api_core import exceptions
 
 nltk.download('punkt')
