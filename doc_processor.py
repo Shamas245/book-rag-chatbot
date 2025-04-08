@@ -21,11 +21,14 @@ class PDFDocumentProcessor:
     def __init__(self, chunk_size: int = 1000, page_batch_size: int = 50, username: str = None, 
                  overlap: int = 200, max_image_size: int = 5_000_000, max_workers: int = None, 
                  api_key: str = None):
-        load_dotenv()
-        self.api_keys = [api_key] if api_key else [os.getenv("GEMINI_API_KEY_1"), os.getenv("GEMINI_API_KEY_2")]
+        load_dotenv()  # For local testing with .env
+        # Use Streamlit Secrets on Cloud, fallback to env vars or provided api_key locally
+        self.api_keys = [st.secrets.get("GOOGLE_API_KEY")] if st.secrets else \
+                        [api_key] if api_key else \
+                        [os.getenv("GEMINI_API_KEY_1"), os.getenv("GEMINI_API_KEY_2")]
         self.api_keys = [key for key in self.api_keys if key]
         if not self.api_keys:
-            raise ValueError("No valid Gemini API key provided via UI or .env")
+            raise ValueError("No valid Gemini API key provided via UI, .env, or parameter")
         
         self.current_api_key_index = 0
         self.current_api_key = self.api_keys[self.current_api_key_index]
