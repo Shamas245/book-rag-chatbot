@@ -4,7 +4,7 @@ langchain-community==0.3.8
 langchain-core==0.3.33
 langchain-google-genai==2.0.6
 langgraph==0.2.68
-chromadb==0.3.26  # Downgraded further
+chromadb==0.3.26
 chainlit==2.4.400
 pymupdf==1.25.4
 python-dotenv==1.0.1
@@ -17,3 +17,4 @@ tenacity==8.5.0
 nltk==3.9.1
 google-api-core==2.23.0
 langchain-chroma==0.2.2
+pysqlite3-binary==0.5.1 
