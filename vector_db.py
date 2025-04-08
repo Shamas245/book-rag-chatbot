@@ -1,6 +1,6 @@
 from typing import List, Dict, Any
 import logging
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma  # Updated import
 from langchain_community.vectorstores.utils import filter_complex_metadata
 from langchain.docstore.document import Document
 
