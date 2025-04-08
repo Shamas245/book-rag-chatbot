@@ -18,6 +18,11 @@ logger = logging.getLogger(__name__)
 def main():
     st.title("Book Q&A System")
 
+    # Preload API key from Streamlit Secrets
+    if "gemini_api_key" not in st.session_state and st.secrets.get("GOOGLE_API_KEY"):
+        st.session_state.gemini_api_key = st.secrets["GOOGLE_API_KEY"]
+        logger.info("Preloaded GOOGLE_API_KEY from Streamlit Secrets")
+
     # Ensure username is set
     if "username" not in st.session_state:
         st.subheader("Login or Register")
@@ -46,6 +51,7 @@ def main():
     # Initialize processor and vector_db if not already done
     if "processor" not in st.session_state:
         api_key = st.session_state.get("gemini_api_key", None)
+        logger.info(f"Using API key for initialization: {api_key is not None}")
         try:
             processor = PDFDocumentProcessor(
                 chunk_size=1500, 
@@ -103,8 +109,8 @@ def main():
 
     # Processed Books section
     st.sidebar.subheader("Processed Books")
-    if st.session_state.processed_books:  # Safe to access now
-        books_to_delete = []  # Initialize here
+    if st.session_state.processed_books:
+        books_to_delete = []
         for idx, (book_hash, book_name) in enumerate(st.session_state.processed_books.items(), 1):
             col1, col2 = st.sidebar.columns([3, 1])
             with col1:
@@ -113,7 +119,6 @@ def main():
                 if st.button("Delete", key=f"delete_{book_hash}"):
                     books_to_delete.append(book_hash)
         
-        # Process deletions
         for book_hash in books_to_delete:
             del st.session_state.processed_books[book_hash]
             chroma_dir = f"./chroma_db_{username}"
@@ -266,3 +271,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
