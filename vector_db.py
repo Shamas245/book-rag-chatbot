@@ -15,6 +15,7 @@ logger.info(f"SQLite version: {sqlite3.sqlite_version}")
 class VectorDBError(Exception):
     pass
 
+
 class VectorDBManager:
     def __init__(self, embedding_model, username: str):
         self.embedding_model = embedding_model
