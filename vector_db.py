@@ -3,7 +3,7 @@ import logging
 from langchain_chroma import Chroma
 from langchain_community.vectorstores.utils import filter_complex_metadata
 from langchain.docstore.document import Document
-import sqlite3  # Add this to debug the version
+from chromadb.config import Settings
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -24,14 +24,19 @@ class VectorDBManager:
 
     def _initialize_vector_store(self):
         try:
+            # Configure Chroma to use DuckDB as the backend
+            settings = Settings(
+                chroma_db_impl="duckdb+parquet",
+                persist_directory=f"./chroma_db_{self.username}"
+            )
             self.vector_store = Chroma(
                 embedding_function=self.embedding_model,
-                persist_directory=f"./chroma_db_{self.username}"
+                client_settings=settings
             )
             logger.info(f"Vector store initialized for user {self.username}")
         except Exception as e:
             logger.error(f"Vector store initialization failed: {str(e)}", exc_info=True)
-            raise VectorDBError(f"Could not initialize vector database: {str(e)}")
+            raise VectorDBError(f"Could not initialize vector database: {str(e)}") 
 
     def store_in_vector_db(self, chunks_with_embeddings: List[Dict[str, Any]]):
         documents = [Document(page_content=chunk["text"], metadata=chunk["metadata"]) 
