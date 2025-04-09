@@ -18,11 +18,6 @@ logger = logging.getLogger(__name__)
 def main():
     st.title("Book Q&A System")
 
-    # Preload API key from Streamlit Secrets
-    if "gemini_api_key" not in st.session_state and st.secrets.get("GOOGLE_API_KEY"):
-        st.session_state.gemini_api_key = st.secrets["GOOGLE_API_KEY"]
-        logger.info("Preloaded GOOGLE_API_KEY from Streamlit Secrets")
-
     # Ensure username is set
     if "username" not in st.session_state:
         st.subheader("Login or Register")
@@ -42,16 +37,14 @@ def main():
                 st.success(f"Registered as {username}. Please log in.")
             else:
                 st.error("Username already exists")
-        return  # Exit early if not logged in
+        return
     
-    # After login, username is guaranteed
     username = st.session_state.username
     st.write(f"Logged in as {username}")
     
-    # Initialize processor and vector_db if not already done
+    # Initialize processor and vector_db
     if "processor" not in st.session_state:
-        api_key = st.session_state.get("gemini_api_key", None)
-        logger.info(f"Using API key for initialization: {api_key is not None}")
+        api_key = st.session_state.get("gemini_api_key", st.secrets.get("GOOGLE_API_KEY", None))
         try:
             processor = PDFDocumentProcessor(
                 chunk_size=1500, 
@@ -65,10 +58,10 @@ def main():
             st.error(f"Invalid API key: {str(e)}")
             return
         except VectorDBError as e:
-            st.error(f"Database connection failed: {str(e)}. Please try again or check your setup.")
+            st.error(f"Database connection failed: {str(e)}")
             return
 
-    # Initialize messages if not already done
+    # Load conversation history
     if "messages" not in st.session_state:
         try:
             with open(f"conversation_history_{username}.json", "r") as f:
@@ -76,7 +69,7 @@ def main():
         except FileNotFoundError:
             st.session_state.messages = []
 
-    # Initialize processed_books if not already done
+    # Load processed books
     if "processed_books" not in st.session_state:
         try:
             with open(f"processed_books_{username}.json", "r") as f:
@@ -86,7 +79,6 @@ def main():
 
     # Sidebar settings
     st.sidebar.header(f"Settings for {username}")
-    
     api_key_input = st.sidebar.text_input("Gemini API Key", type="password", value=st.session_state.get("gemini_api_key", ""))
     if st.sidebar.button("Save API Key"):
         if api_key_input:
@@ -101,9 +93,9 @@ def main():
                 st.session_state.vector_db = VectorDBManager(st.session_state.processor.embedding_model, username)
                 st.sidebar.success("API Key updated!")
             except ValueError:
-                st.sidebar.error("Invalid API key provided. Please check and try again.")
+                st.sidebar.error("Invalid API key provided.")
             except VectorDBError as e:
-                st.sidebar.error(f"Database connection failed after API update: {str(e)}")
+                st.sidebar.error(f"Database connection failed: {str(e)}")
         else:
             st.sidebar.error("Please enter a valid API key.")
 
@@ -121,27 +113,11 @@ def main():
         
         for book_hash in books_to_delete:
             del st.session_state.processed_books[book_hash]
-            chroma_dir = f"./chroma_db_{username}"
-            if os.path.exists(chroma_dir):
-                if st.session_state.vector_db.vector_store is not None:
-                    try:
-                        st.session_state.vector_db.vector_store.delete_collection()
-                        st.session_state.vector_db.vector_store = None
-                    except Exception as e:
-                        logger.error(f"Failed to delete vector store collection: {e}")
-                try:
-                    shutil.rmtree(chroma_dir)
-                    st.session_state.vector_db = VectorDBManager(st.session_state.processor.embedding_model, username)
-                    st.sidebar.success(f"Deleted book and reset vector DB. Re-upload books as needed.")
-                except Exception as e:
-                    st.sidebar.error(f"Failed to reset vector DB: {str(e)}")
             with open(f"processed_books_{username}.json", "w") as f:
                 json.dump(st.session_state.processed_books, f)
-
-    # Display conversation history
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+            # Reset vector store for simplicity (in-memory FAISS)
+            st.session_state.vector_db = VectorDBManager(st.session_state.processor.embedding_model, username)
+            st.sidebar.success("Deleted book. Re-upload books as needed.")
 
     # File uploader
     uploaded_files = st.file_uploader("Upload Books (PDFs)", type="pdf", accept_multiple_files=True)
@@ -178,41 +154,38 @@ def main():
 
             all_chunks = text_chunks_with_embeddings
             if image_data:
-                st.warning(f"Detected {len(image_data)} images in '{book_name}'. Extracting text requires sufficient Gemini API quota.")
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("Yes", key=f"yes_images_{book_hash}"):
-                        with st.spinner(f"Processing images in {book_name}..."):
-                            try:
-                                image_chunks = st.session_state.processor.process_images(temp_pdf_path, image_data)
-                                image_chunks_with_embeddings = st.session_state.processor.generate_embeddings(image_chunks)
-                                if not image_chunks_with_embeddings:
-                                    st.error(f"Failed to process images in '{book_name}': Network issues or invalid API key.")
-                                else:
-                                    st.session_state.vector_db.store_in_vector_db(image_chunks_with_embeddings)
-                                    st.success(f"Processed {len(image_chunks_with_embeddings)} image chunks for '{book_name}'")
-                                    all_chunks = text_chunks_with_embeddings + image_chunks_with_embeddings
-                            except Exception as e:
-                                st.error(f"Error processing images in '{book_name}': {str(e)}")
-                with col2:
-                    if st.button("No", key=f"no_images_{book_hash}"):
-                        st.info("Skipping image processing.")
-            
+                st.warning(f"Detected {len(image_data)} images in '{book_name}'.")
+                if st.button("Process Images", key=f"yes_images_{book_hash}"):
+                    with st.spinner(f"Processing images in {book_name}..."):
+                        try:
+                            image_chunks = st.session_state.processor.process_images(temp_pdf_path, image_data)
+                            image_chunks_with_embeddings = st.session_state.processor.generate_embeddings(image_chunks)
+                            if image_chunks_with_embeddings:
+                                st.session_state.vector_db.store_in_vector_db(image_chunks_with_embeddings)
+                                st.success(f"Processed {len(image_chunks_with_embeddings)} image chunks for '{book_name}'")
+                                all_chunks = text_chunks_with_embeddings + image_chunks_with_embeddings
+                        except Exception as e:
+                            st.error(f"Error processing images: {str(e)}")
+
             st.session_state.processed_books[book_hash] = book_name
             with open(f"processed_books_{username}.json", "w") as f:
                 json.dump(st.session_state.processed_books, f)
             
-            max_retries = 5
-            for attempt in range(max_retries):
+            for attempt in range(5):
                 try:
                     os.remove(temp_pdf_path)
                     break
                 except Exception as e:
-                    if attempt == max_retries - 1:
-                        st.warning(f"Failed to delete '{temp_pdf_path}' after {max_retries} attempts: {e}")
+                    if attempt == 4:
+                        st.warning(f"Failed to delete '{temp_pdf_path}': {e}")
                     time.sleep(1)
             
             progress_bar.progress((i + 1) / total_books)
+
+    # Display conversation history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
     # Book selection and chat
     book_options = list(st.session_state.processed_books.values())
@@ -247,23 +220,10 @@ def main():
                                 pages = chunk['metadata'].get('pages', 'Unknown')
                                 sources.add(f"{chunk['metadata']['source']} (Pages: {pages})")
                             st.markdown("**Source(s):** " + ", ".join(sources))
-                except KeyError as e:
-                    st.error(f"Error generating answer: Metadata issue ({str(e)} missing). Contact support if this persists.")
-                    logger.error(f"Chat error: {e}")
-                    answer = "Sorry, I couldn’t process your request due to a metadata error."
-                except exceptions.GoogleAPIError as e:
-                    error_msg = "API error occurred. Please check your Gemini API key."
-                    if "Quota exceeded" in str(e):
-                        error_msg = "API quota exceeded. Please check your Gemini API key limits."
-                    elif "503" in str(e) or "Timeout" in str(e):
-                        error_msg = "Network issue: Unable to connect to the server. Check your internet."
-                    st.error(error_msg)
-                    logger.error(f"Chat error: {e}")
-                    answer = "Sorry, I couldn’t process your request due to an API error."
                 except Exception as e:
-                    st.error(f"Unexpected error generating answer: {str(e)}. Please try again or contact support.")
+                    st.error(f"Error generating answer: {str(e)}")
                     logger.error(f"Chat error: {e}")
-                    answer = "Sorry, I couldn’t process your request due to an unexpected error."
+                    answer = "Sorry, I couldn’t process your request."
                 
                 st.session_state.messages.append({"role": "assistant", "content": answer})
                 with open(f"conversation_history_{username}.json", "w") as f:
